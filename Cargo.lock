@@ -66,17 +66,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
-name = "cfg_eval"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45565fc9416b9896014f5732ac776f810ee53a66730c17e4020c3ec064a8f88f"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.87",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -568,10 +557,9 @@ dependencies = [
 
 [[package]]
 name = "stellar-xdr"
-version = "25.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=99c73b18ccd68bc3439be30801da6261b193d2da#99c73b18ccd68bc3439be30801da6261b193d2da"
+version = "26.0.0"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=f0ed902950d517ec3cc31d5af7c268e2f025d093#f0ed902950d517ec3cc31d5af7c268e2f025d093"
 dependencies = [
- "cfg_eval",
  "crate-git-revision",
  "escape-bytes",
  "ethnum",

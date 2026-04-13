@@ -5,7 +5,7 @@ use std::{
     fmt::Debug,
     rc::Rc,
 };
-use stellar_xdr::curr::{Limits, NodeId, PublicKey, ReadXdr, ScpQuorumSet};
+use stellar_xdr::{Limits, NodeId, PublicKey, ReadXdr, ScpQuorumSet};
 
 use crate::{resource_limiter::ResourceLimiter, ResourceQuantity};
 
