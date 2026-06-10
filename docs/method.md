@@ -148,6 +148,7 @@ quorum at all.
 - Maximal quorum **non-empty** → run the disjoint-quorum solve as above, giving
   `SAT` (a split) or `UNSAT` (intertwined).
 
-This mirrors stellar-core's legacy C++ quorum-intersection checker, which detects
-the same "no quorums found" condition via its own maximal-quorum contraction and
-warns about a possible network halt.
+This mirrors stellar-core's legacy C++ quorum-intersection checker, which
+detects the same "no quorums found" condition via the same greatest-fixpoint
+contraction (`QuorumIntersectionCheckerImpl::contractToMaximalQuorum`) and warns
+about a possible network halt.

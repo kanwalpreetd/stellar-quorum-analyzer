@@ -137,6 +137,11 @@ impl Fbas {
     /// validators that belong to *some* quorum. It is empty **if and only if**
     /// the FBAS contains no quorum at all (a degenerate / potential-halt
     /// condition).
+    ///
+    /// NB: this is the same greatest-fixpoint contraction as stellar-core's
+    /// `QuorumIntersectionCheckerImpl::contractToMaximalQuorum` which computes
+    /// the greatest fixpoint of `f(X) = { n in X | X satisfies n's quorum set
+    ///  }`.
     pub(crate) fn maximal_quorum(
         &self,
         resource_limiter: &ResourceLimiter,
