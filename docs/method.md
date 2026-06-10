@@ -121,3 +121,33 @@ Similarly for $B$:
 $$
 \bigwedge_{i=1}^M \left(\left(\neg B_i \vee \bigvee_{j=1}^{|\Pi_i|} \beta_i^j\right)\wedge \bigwedge_{j=1}^{|\Pi_i|}\left(\bigwedge_{k\in s_i^j} \left( \neg \beta_i^j \vee B_k \right) \right)  \wedge \left( \beta_i^j \vee \bigvee_{k\in s_i^j}\neg B_k \right)\right)
 $$
+
+## Quorum existence and the `NoQuorum` result
+
+The CNF above is satisfiable iff two non-empty, disjoint quorums exist. A plain
+`UNSAT` therefore answers "there are no two disjoint quorums" — but that single
+answer collapses two opposite network states:
+
+1. **Intertwined (healthy):** quorums exist and every pair of quorums
+   intersects.
+2. **Degenerate:** no quorum exists at all (for example, a validator's threshold
+   cannot be met because some of its quorum-set members are unknown/offline and
+   are treated as non-participating). With no quorum to find, the formula is
+   *vacuously* unsatisfiable.
+
+To avoid reporting a degenerate, possibly-halted network as "safe", the analyzer
+runs a quorum-existence pre-pass before the SAT solve. It computes the **maximal
+quorum** — the union of all quorums — by a greatest-fixpoint contraction: begin
+with every validator, then repeatedly drop any validator whose quorum set is not
+satisfied by the validators that remain, until the set is stable. Because
+quorums are closed under union, the maximal quorum is empty iff the FBAS has no
+quorum at all.
+
+- Maximal quorum **empty** → `SolveStatus::NoQuorum` (degenerate / possible
+  halt); the SAT solve is skipped.
+- Maximal quorum **non-empty** → run the disjoint-quorum solve as above, giving
+  `SAT` (a split) or `UNSAT` (intertwined).
+
+This mirrors stellar-core's legacy C++ quorum-intersection checker, which detects
+the same "no quorums found" condition via its own maximal-quorum contraction and
+warns about a possible network halt.

@@ -1,0 +1,5 @@
+[
+  {"publicKey":"A","quorumSet":{"threshold":2,"validators":["A","B","C"],"innerQuorumSets":[]}},
+  {"publicKey":"B","quorumSet":{"threshold":2,"validators":["A","B","C"],"innerQuorumSets":[]}},
+  {"publicKey":"C","quorumSet":{"threshold":2,"validators":["A","B","C"],"innerQuorumSets":[]}}
+]
