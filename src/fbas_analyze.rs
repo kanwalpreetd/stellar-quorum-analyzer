@@ -134,14 +134,22 @@ impl FbasAnalyzer {
         fbas: Fbas,
         resource_limiter: ResourceLimiter,
     ) -> Result<Self, FbasError> {
+        let status = if fbas.maximal_quorum(&resource_limiter)?.is_empty() {
+            SolveStatus::NoQuorum
+        } else {
+            SolveStatus::UNKNOWN
+        };
+
         let mut analyzer = Self {
             fbas,
             solver: Solver::new(Default::default(), resource_limiter),
-            status: SolveStatus::UNKNOWN,
+            status,
             vars: VarManager::default(),
         };
-        analyzer.construct_vars()?;
-        analyzer.construct_formula()?;
+        if analyzer.status != SolveStatus::NoQuorum {
+            analyzer.construct_vars()?;
+            analyzer.construct_formula()?;
+        }
         Ok(analyzer)
     }
 
@@ -278,17 +286,11 @@ impl FbasAnalyzer {
     pub fn solve(&mut self) -> Result<SolveStatus, FbasError> {
         let resource_limiter = self.solver.cb().clone();
 
-        // Quorum-existence pre-pass: if the FBAS has no quorum at all, the
-        // disjoint-quorum formula is vacuously unsatisfiable. Report this as a
-        // distinct `NoQuorum` (degenerate / possible network halt) rather than
-        // conflating it with `UNSAT` ("a quorum exists and all quorums
-        // intersect"), and skip the SAT solve.
-        if self.fbas.maximal_quorum(&resource_limiter)?.is_empty() {
+        if self.status == SolveStatus::NoQuorum {
             warn!(
                 target: "SCP",
                 "FbasAnalyzer found no quorum in the FBAS (possible network halt)"
             );
-            self.status = SolveStatus::NoQuorum;
             resource_limiter.measure_and_enforce_limits()?;
             return Ok(self.status.clone());
         }
@@ -350,5 +352,14 @@ impl FbasAnalyzer {
             }
             _ => Ok((vec![], vec![])),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn sat_formula_size_for_test(&self) -> (usize, u64, usize) {
+        (
+            self.solver.num_vars() as usize,
+            self.solver.num_clauses(),
+            self.vars.node_quorum_membership.len(),
+        )
     }
 }

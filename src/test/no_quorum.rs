@@ -73,6 +73,17 @@ fn solve_reports_no_quorum_when_threshold_exceeds_degree() {
 }
 
 #[test]
+fn no_quorum_analyzer_skips_sat_formula_construction() {
+    let analyzer = FbasAnalyzer::from_json_path(
+        &format!("{DATA_DIR}no_quorum_threshold_exceeds_degree.json"),
+        ResourceLimiter::unlimited(),
+    )
+    .expect("load analyzer");
+
+    assert_eq!(analyzer.sat_formula_size_for_test(), (0, 0, 0));
+}
+
+#[test]
 fn solve_reports_split_when_feasible() {
     let status = solve_status(&format!("{DATA_DIR}feasible_split_with_unknown.json"));
     assert!(
