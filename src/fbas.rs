@@ -177,8 +177,7 @@ impl Fbas {
         match self.graph.neighbors(v).next() {
             Some(qset_node) => self.node_satisfied_by(qset_node, set),
             // `from_quorum_set_map` adds exactly one edge from every validator
-            // to its quorum-set node, and validators with an empty quorum set
-            // are dropped at parse time. A `None` here therefore means the
+            // to its quorum-set node. A `None` here therefore means that
             // construction invariant was violated.
             None => Err(FbasError::InternalError(
                 "validator vertex has no quorum-set successor",
@@ -209,6 +208,9 @@ impl Fbas {
             Some(Vertex::QSet(qset)) => {
                 let mut satisfied: u32 = 0;
                 for succ in self.graph.neighbors(n) {
+                    if satisfied >= qset.threshold {
+                        return Ok(true);
+                    }
                     if self.node_satisfied_by(succ, set)? {
                         satisfied += 1;
                     }
