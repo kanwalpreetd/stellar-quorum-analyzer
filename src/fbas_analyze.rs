@@ -82,6 +82,12 @@ pub struct FbasAnalyzer {
 pub enum SolveStatus {
     UNSAT,
     SAT((Vec<NodeIndex>, Vec<NodeIndex>)),
+    /// The FBAS contains no quorum at all (e.g. a validator depends on nodes
+    /// that cannot satisfy its threshold). The disjoint-quorum question is
+    /// vacuously unsatisfiable here, but this is a degenerate / potential-halt
+    /// condition and must NOT be conflated with `UNSAT` ("a quorum exists and
+    /// all quorums intersect").
+    NoQuorum,
     #[default]
     UNKNOWN,
 }
@@ -93,6 +99,7 @@ impl std::fmt::Debug for SolveStatus {
             SolveStatus::SAT((quorum_a, quorum_b)) => {
                 write!(f, "SAT(quorum_a: {quorum_a:?}, quorum_b: {quorum_b:?})")
             }
+            SolveStatus::NoQuorum => write!(f, "NoQuorum"),
             SolveStatus::UNKNOWN => write!(f, "UNKNOWN"),
         }
     }
@@ -127,14 +134,22 @@ impl FbasAnalyzer {
         fbas: Fbas,
         resource_limiter: ResourceLimiter,
     ) -> Result<Self, FbasError> {
+        let status = if fbas.maximal_quorum(&resource_limiter)?.is_empty() {
+            SolveStatus::NoQuorum
+        } else {
+            SolveStatus::UNKNOWN
+        };
+
         let mut analyzer = Self {
             fbas,
             solver: Solver::new(Default::default(), resource_limiter),
-            status: SolveStatus::UNKNOWN,
+            status,
             vars: VarManager::default(),
         };
-        analyzer.construct_vars()?;
-        analyzer.construct_formula()?;
+        if analyzer.status != SolveStatus::NoQuorum {
+            analyzer.construct_vars()?;
+            analyzer.construct_formula()?;
+        }
         Ok(analyzer)
     }
 
@@ -269,13 +284,23 @@ impl FbasAnalyzer {
     }
 
     pub fn solve(&mut self) -> Result<SolveStatus, FbasError> {
+        let resource_limiter = self.solver.cb().clone();
+
+        if self.status == SolveStatus::NoQuorum {
+            warn!(
+                target: "SCP",
+                "FbasAnalyzer found no quorum in the FBAS (possible network halt)"
+            );
+            resource_limiter.measure_and_enforce_limits()?;
+            return Ok(self.status.clone());
+        }
+
         let mut th = theory::EmptyTheory::new();
         // Note on resource limiting: the solver checks `ResourceLimiter::stop()` internally
         // on its inner loop. If resource limits are exceeds, it will discontinue and return
         // `SolveStatus::UNKNOWN`.
         // In order for the solver to return a `ResourcelimitExceeded` error, we need to
         // enforce the limit before returning.
-        let resource_limiter = self.solver.cb().clone();
         let result = self.solver.solve_limited_th_full(&mut th, &[]);
         self.status = match result {
             SolveResult::Sat(model) => {
@@ -327,5 +352,14 @@ impl FbasAnalyzer {
             }
             _ => Ok((vec![], vec![])),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn sat_formula_size_for_test(&self) -> (usize, u64, usize) {
+        (
+            self.solver.num_vars() as usize,
+            self.solver.num_clauses(),
+            self.vars.node_quorum_membership.len(),
+        )
     }
 }

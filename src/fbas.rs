@@ -128,6 +128,105 @@ impl Fbas {
         }
     }
 
+    /// Computes the maximal quorum (the union of all quorums) as a set of
+    /// validator node indices, via a greatest-fixpoint contraction: start with
+    /// all validators and repeatedly drop any validator whose quorum set is not
+    /// satisfied by the survivors, until the set is stable.
+    ///
+    /// Because quorums are closed under union, the result is exactly the set of
+    /// validators that belong to *some* quorum. It is empty **if and only if**
+    /// the FBAS contains no quorum at all (a degenerate / potential-halt
+    /// condition).
+    ///
+    /// NB: this is the same greatest-fixpoint contraction as stellar-core's
+    /// `QuorumIntersectionCheckerImpl::contractToMaximalQuorum` which computes
+    /// the greatest fixpoint of `f(X) = { n in X | X satisfies n's quorum set
+    ///  }`.
+    pub(crate) fn maximal_quorum(
+        &self,
+        resource_limiter: &ResourceLimiter,
+    ) -> Result<BTreeSet<NodeIndex>, FbasError> {
+        let mut current: BTreeSet<NodeIndex> = self.validators.iter().copied().collect();
+        loop {
+            resource_limiter.measure_and_enforce_limits()?;
+            let mut next = BTreeSet::new();
+            for &v in &current {
+                if self.validator_satisfied_by(v, &current)? {
+                    next.insert(v);
+                }
+            }
+            // `next` is always a subset of `current`, so equal sizes means we
+            // reached the fixpoint.
+            if next.len() == current.len() {
+                return Ok(next);
+            }
+            current = next;
+        }
+    }
+
+    /// A validator is satisfied by `set` iff its single quorum-set successor is
+    /// satisfied by `set`.
+    ///
+    /// Returns `Err(InternalError)` if the validator has no quorum-set
+    /// successor. This is unreachable in a well-formed graph.
+    fn validator_satisfied_by(
+        &self,
+        v: NodeIndex,
+        set: &BTreeSet<NodeIndex>,
+    ) -> Result<bool, FbasError> {
+        match self.graph.neighbors(v).next() {
+            Some(qset_node) => self.node_satisfied_by(qset_node, set),
+            // `from_quorum_set_map` adds exactly one edge from every validator
+            // to its quorum-set node. A `None` here therefore means that
+            // construction invariant was violated.
+            None => Err(FbasError::InternalError(
+                "validator vertex has no quorum-set successor",
+            )),
+        }
+    }
+
+    /// Whether a graph node is satisfied by `set`:
+    /// - a validator node is satisfied iff it is a member of `set`;
+    /// - a quorum-set node is satisfied iff at least `threshold` of its
+    ///   successors are satisfied (recursing through inner quorum-set nodes).
+    ///
+    /// Recursion descends only into quorum-set successors (validator successors
+    /// are base cases) and the quorum-set subgraph is acyclic, so this always
+    /// terminates. A threshold of 0 is trivially satisfied; a threshold greater
+    /// than the number of satisfiable successors is never satisfied — matching
+    /// the SAT encoding's treatment of these cases.
+    ///
+    /// Returns `Err(InternalError)` if `n` does not resolve to a vertex. This is
+    /// unreachable in a well-formed graph.
+    fn node_satisfied_by(
+        &self,
+        n: NodeIndex,
+        set: &BTreeSet<NodeIndex>,
+    ) -> Result<bool, FbasError> {
+        match self.graph.node_weight(n) {
+            Some(Vertex::Validator(_)) => Ok(set.contains(&n)),
+            Some(Vertex::QSet(qset)) => {
+                let mut satisfied: u32 = 0;
+                for succ in self.graph.neighbors(n) {
+                    if satisfied >= qset.threshold {
+                        return Ok(true);
+                    }
+                    if self.node_satisfied_by(succ, set)? {
+                        satisfied += 1;
+                    }
+                }
+                Ok(satisfied >= qset.threshold)
+            }
+            // `n` is only ever obtained from `graph.neighbors(...)` or the
+            // validator->qset edge, both of which yield valid, existing node
+            // indices. A `None` here therefore means the graph is internally
+            // inconsistent.
+            None => Err(FbasError::InternalError(
+                "graph node index has no vertex weight",
+            )),
+        }
+    }
+
     fn from_quorum_set_map(
         qsm: QuorumSetMap,
         resource_limiter: &ResourceLimiter,

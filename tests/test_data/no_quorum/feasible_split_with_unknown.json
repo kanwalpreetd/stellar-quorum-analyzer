@@ -1,0 +1,6 @@
+[
+  {"publicKey":"A","quorumSet":{"threshold":2,"validators":["A","B","GHOST"],"innerQuorumSets":[]}},
+  {"publicKey":"B","quorumSet":{"threshold":2,"validators":["A","B","GHOST"],"innerQuorumSets":[]}},
+  {"publicKey":"C","quorumSet":{"threshold":2,"validators":["C","D","GHOST"],"innerQuorumSets":[]}},
+  {"publicKey":"D","quorumSet":{"threshold":2,"validators":["C","D","GHOST"],"innerQuorumSets":[]}}
+]
